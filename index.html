@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KJV Bible Memory Verse App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
+    <h1 class="text-2xl font-bold text-center mb-4">KJV Bible Memory Verse App</h1>
+    
+    <!-- Verse Selection -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Select Verse</label>
+      <div class="grid grid-cols-3 gap-2">
+        <select id="bookSelect" class="p-2 border border-gray-300 rounded-md">
+          <option value="">Select Book</option>
+        </select>
+        <select id="chapterSelect" class="p-2 border border-gray-300 rounded-md" disabled>
+          <option value="">Select Chapter</option>
+        </select>
+        <select id="verseSelect" class="p-2 border border-gray-300 rounded-md" disabled>
+          <option value="">Select Verse(s)</option>
+        </select>
+      </div>
+      <button id="fetchVerseBtn" class="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 w-full" disabled>Load Verse</button>
+      <label for="recentVerses" class="block text-sm font-medium text-gray-700 mt-4">Recent Verses</label>
+      <select id="recentVerses" class="mt-1 block w-full p-2 border border-gray-300 rounded-md">
+        <option value="">Select a recent verse...</option>
+      </select>
+      <p id="verseError" class="mt-2 text-red-500 text-sm hidden">Error fetching data.</p>
+    </div>
+
+    <!-- Verse Display -->
+    <div id="verseDisplay" class="text-lg text-center mb-6 font-serif italic text-gray-800"></div>
+
+    <!-- Controls -->
+    <div id="controls" class="flex justify-center space-x-4">
+      <button id="startBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600" disabled>Start Practice</button>
+      <button id="hideMoreBtn" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 hidden">Hide More Words</button>
+      <button id="showMoreBtn" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 hidden">Show More Words</button>
+      <button id="showVerseBtn" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600 hidden">Show Verse</button>
+    </div>
+  </div>
+
+  <script>
+    // Initialize variables
+    let currentVerse = '';
+    let words = [];
+    let hiddenIndices = [];
+    let step = 0;
+    const wordsToHidePerStep = 3;
+
+    // API configuration
+    const API_KEY = '98628b5af7d735a38ea31604a8d69092'; // Replace with your API.Bible key
+    const BIBLE_ID = 'de4e12af7f28f599-02'; // KJV Bible ID
+    const API_BASE_URL = 'https://api.scripture.api.bible/v1';
+
+    // Static KJV book list (66 canonical books)
+    const bookList = [
+      { id: 'GEN', name: 'Genesis' }, { id: 'EXO', name: 'Exodus' }, { id: 'LEV', name: 'Leviticus' },
+      { id: 'NUM', name: 'Numbers' }, { id: 'DEU', name: 'Deuteronomy' }, { id: 'JOS', name: 'Joshua' },
+      { id: 'JDG', name: 'Judges' }, { id: 'RUT', name: 'Ruth' }, { id: '1SA', name: '1 Samuel' },
+      { id: '2SA', name: '2 Samuel' }, { id: '1KI', name: '1 Kings' }, { id: '2KI', name: '2 Kings' },
+      { id: '1CH', name: '1 Chronicles' }, { id: '2CH', name: '2 Chronicles' }, { id: 'EZR', name: 'Ezra' },
+      { id: 'NEH', name: 'Nehemiah' }, { id: 'EST', name: 'Esther' }, { id: 'JOB', name: 'Job' },
+      { id: 'PSA', name: 'Psalms' }, { id: 'PRO', name: 'Proverbs' }, { id: 'ECC', name: 'Ecclesiastes' },
+      { id: 'SNG', name: 'Song of Solomon' }, { id: 'ISA', name: 'Isaiah' }, { id: 'JER', name: 'Jeremiah' },
+      { id: 'LAM', name: 'Lamentations' }, { id: 'EZK', name: 'Ezekiel' }, { id: 'DAN', name: 'Daniel' },
+      { id: 'HOS', name: 'Hosea' }, { id: 'JOL', name: 'Joel' }, { id: 'AMO', name: 'Amos' },
+      { id: 'OBA', name: 'Obadiah' }, { id: 'JON', name: 'Jonah' }, { id: 'MIC', name: 'Micah' },
+      { id: 'NAM', name: 'Nahum' }, { id: 'HAB', name: 'Habakkuk' }, { id: 'ZEP', name: 'Zephaniah' },
+      { id: 'HAG', name: 'Haggai' }, { id: 'ZEC', name: 'Zechariah' }, { id: 'MAL', name: 'Malachi' },
+      { id: 'MAT', name: 'Matthew' }, { id: 'MRK', name: 'Mark' }, { id: 'LUK', name: 'Luke' },
+      { id: 'JHN', name: 'John' }, { id: 'ACT', name: 'Acts' }, { id: 'ROM', name: 'Romans' },
+      { id: '1CO', name: '1 Corinthians' }, { id: '2CO', name: '2 Corinthians' }, { id: 'GAL', name: 'Galatians' },
+      { id: 'EPH', name: 'Ephesians' }, { id: 'PHP', name: 'Philippians' }, { id: 'COL', name: 'Colossians' },
+      { id: '1TH', name: '1 Thessalonians' }, { id: '2TH', name: '2 Thessalonians' }, { id: '1TI', name: '1 Timothy' },
+      { id: '2TI', name: '2 Timothy' }, { id: 'TIT', name: 'Titus' }, { id: 'PHM', name: 'Philemon' },
+      { id: 'HEB', name: 'Hebrews' }, { id: 'JAS', name: 'James' }, { id: '1PE', name: '1 Peter' },
+      { id: '2PE', name: '2 Peter' }, { id: '1JN', name: '1 John' }, { id: '2JN', name: '2 John' },
+      { id: '3JN', name: '3 John' }, { id: 'JUD', name: 'Jude' }, { id: 'REV', name: 'Revelation' }
+    ];
+
+    // DOM elements
+    const bookSelect = document.getElementById('bookSelect');
+    const chapterSelect = document.getElementById('chapterSelect');
+    const verseSelect = document.getElementById('verseSelect');
+    const fetchVerseBtn = document.getElementById('fetchVerseBtn');
+    const recentVerses = document.getElementById('recentVerses');
+    const verseError = document.getElementById('verseError');
+    const verseDisplay = document.getElementById('verseDisplay');
+    const startBtn = document.getElementById('startBtn');
+    const hideMoreBtn = document.getElementById('hideMoreBtn');
+    const showMoreBtn = document.getElementById('showMoreBtn');
+    const showVerseBtn = document.getElementById('showVerseBtn');
+
+    // LocalStorage for recent verses
+    function loadRecentVerses() {
+      const recent = JSON.parse(localStorage.getItem('recentVerses') || '[]');
+      recentVerses.innerHTML = '<option value="">Select a recent verse...</option>';
+      recent.forEach(({ book, chapter, verse, text }) => {
+        const option = document.createElement('option');
+        option.value = JSON.stringify({ book, chapter, verse, text });
+        option.textContent = `${book} ${chapter}:${verse}`;
+        recentVerses.appendChild(option);
+      });
+    }
+
+    function saveRecentVerse(book, chapter, verse, text) {
+      let recent = JSON.parse(localStorage.getItem('recentVerses') || '[]');
+      const reference = `${chapter}:${verse}`;
+      recent = [{ book, chapter, verse, text }, ...recent.filter(v => `${v.chapter}:${v.verse}` !== reference)].slice(0, 10);
+      localStorage.setItem('recentVerses', JSON.stringify(recent));
+      loadRecentVerses();
+    }
+
+    // Populate books
+    function populateBooks() {
+      bookSelect.innerHTML = '<option value="">Select Book</option>';
+      bookList.forEach(book => {
+        const option = document.createElement('option');
+        option.value = book.id;
+        option.textContent = book.name;
+        bookSelect.appendChild(option);
+      });
+      bookSelect.disabled = false;
+    }
+
+    // Fetch chapters for a book
+    async function fetchChapters(bookId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/bibles/${BIBLE_ID}/books/${bookId}/chapters`, {
+          headers: { 'api-key': API_KEY }
+        });
+        if (!response.ok) throw new Error('Failed to fetch chapters');
+        const data = await response.json();
+        chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
+        data.data
+          .filter(chapter => /^\d+$/.test(chapter.number)) // Filter out non-numeric chapters (e.g., "intro")
+          .forEach(chapter => {
+            const option = document.createElement('option');
+            option.value = chapter.number;
+            option.textContent = chapter.number;
+            chapterSelect.appendChild(option);
+          });
+        chapterSelect.disabled = false;
+        verseSelect.disabled = true;
+        verseSelect.innerHTML = '<option value="">Select Verse(s)</option>';
+        fetchVerseBtn.disabled = true;
+      } catch (e) {
+        showError('Failed to load chapters: ' + e.message);
+      }
+    }
+
+    // Fetch verses for a chapter
+    async function fetchVerses(bookId, chapterNumber) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/bibles/${BIBLE_ID}/chapters/${bookId}.${chapterNumber}/verses`, {
+          headers: { 'api-key': API_KEY }
+        });
+        if (!response.ok) throw new Error('Failed to fetch verses');
+        const data = await response.json();
+        verseSelect.innerHTML = '<option value="">Select Verse(s)</option>';
+        const verses = data.data.map(verse => verse.id.split('.').pop());
+        verses.forEach(verse => {
+          const option = document.createElement('option');
+          option.value = `${bookId}.${chapterNumber}.${verse}`;
+          option.textContent = verse;
+          verseSelect.appendChild(option);
+        });
+        // Add range options (up to 3 verses apart)
+        for (let i = 0; i < verses.length; i++) {
+          for (let j = i + 1; j < Math.min(i + 4, verses.length); j++) {
+            const option = document.createElement('option');
+            option.value = `${bookId}.${chapterNumber}.${verses[i]}-${bookId}.${chapterNumber}.${verses[j]}`;
+            option.textContent = `${verses[i]}-${verses[j]}`;
+            verseSelect.appendChild(option);
+          }
+        }
+        verseSelect.disabled = false;
+      } catch (e) {
+        showError('Failed to load verses: ' + e.message);
+      }
+    }
+
+    // Fetch verse text
+    async function fetchVerse(verseId, book, chapter, verse) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/bibles/${BIBLE_ID}/verses/${encodeURIComponent(verseId)}?content-type=text&include-verse-numbers=false`, {
+          headers: { 'api-key': API_KEY }
+        });
+        if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+        const data = await response.json();
+        const text = data.data.content.trim();
+        saveRecentVerse(book, chapter, verse, text);
+        return text;
+      } catch (e) {
+        throw new Error(`Failed to fetch verse: ${e.message}`);
+      }
+    }
+
+    // Event listeners
+    bookSelect.addEventListener('change', () => {
+      chapterSelect.disabled = true;
+      verseSelect.disabled = true;
+      fetchVerseBtn.disabled = true;
+      verseDisplay.textContent = '';
+      startBtn.disabled = true;
+      verseError.classList.add('hidden');
+      if (bookSelect.value) {
+        fetchChapters(bookSelect.value);
+      }
+    });
+
+    chapterSelect.addEventListener('change', () => {
+      verseSelect.disabled = true;
+      fetchVerseBtn.disabled = true;
+      verseDisplay.textContent = '';
+      startBtn.disabled = true;
+      verseError.classList.add('hidden');
+      if (chapterSelect.value) {
+        fetchVerses(bookSelect.value, chapterSelect.value);
+      }
+    });
+
+    verseSelect.addEventListener('change', () => {
+      fetchVerseBtn.disabled = !verseSelect.value;
+      verseDisplay.textContent = '';
+      startBtn.disabled = true;
+      verseError.classList.add('hidden');
+    });
+
+    recentVerses.addEventListener('change', () => {
+      if (recentVerses.value) {
+        const { book, chapter, verse, text } = JSON.parse(recentVerses.value);
+        currentVerse = text;
+        verseDisplay.textContent = text;
+        startBtn.disabled = false;
+        resetPractice();
+        verseError.classList.add('hidden');
+        // Update dropdowns to match selection
+        bookSelect.value = bookList.find(b => b.name === book)?.id || '';
+        chapterSelect.disabled = true;
+        verseSelect.disabled = true;
+        fetchVerseBtn.disabled = true;
+        if (bookSelect.value) {
+          fetchChapters(bookSelect.value).then(() => {
+            chapterSelect.value = chapter;
+            fetchVerses(bookSelect.value, chapter).then(() => {
+              verseSelect.value = verse.includes('-') ? 
+                `${bookSelect.value}.${chapter}.${verse}` : 
+                `${bookSelect.value}.${chapter}.${verse}`;
+              fetchVerseBtn.disabled = false;
+            });
+          });
+        }
+      }
+    });
+
+    fetchVerseBtn.addEventListener('click', async () => {
+      const verseId = verseSelect.value;
+      if (!verseId) return;
+      verseError.classList.add('hidden');
+      try {
+        const book = bookSelect.options[bookSelect.selectedIndex].textContent;
+        const chapter = chapterSelect.value;
+        const verse = verseSelect.options[verseSelect.selectedIndex].textContent;
+        const verseText = await fetchVerse(verseId, book, chapter, verse);
+        currentVerse = verseText;
+        verseDisplay.textContent = verseText;
+        startBtn.disabled = false;
+        resetPractice();
+      } catch (e) {
+        showError(e.message);
+      }
+    });
+
+    // Start practice
+    startBtn.addEventListener('click', () => {
+      if (currentVerse) {
+        words = currentVerse.split(' ');
+        resetPractice();
+        startBtn.classList.add('hidden');
+        hideMoreBtn.classList.remove('hidden');
+        showMoreBtn.classList.remove('hidden');
+        showVerseBtn.classList.remove('hidden');
+        updateDisplay();
+      }
+    });
+
+    // Handle hiding more words
+    hideMoreBtn.addEventListener('click', () => {
+      step++;
+      hideWords();
+      updateDisplay();
+    });
+
+    // Handle showing more words
+    showMoreBtn.addEventListener('click', () => {
+      if (step > 0) {
+        step--;
+        hiddenIndices = hiddenIndices.slice(0, step * wordsToHidePerStep);
+        updateDisplay();
+      }
+    });
+
+    // Show full verse temporarily
+    showVerseBtn.addEventListener('click', () => {
+      if (currentVerse) {
+        verseDisplay.textContent = currentVerse;
+        setTimeout(updateDisplay, 3000); // Revert after 3 seconds
+      }
+    });
+
+    // Show error message
+    function showError(message) {
+      verseError.textContent = message;
+      verseError.classList.remove('hidden');
+      startBtn.disabled = true;
+      verseDisplay.textContent = '';
+    }
+
+    // Reset practice session
+    function resetPractice() {
+      step = 0;
+      hiddenIndices = [];
+      words = currentVerse.split(' ');
+      updateDisplay();
+    }
+
+    // Hide words for current step
+    function hideWords() {
+      while (hiddenIndices.length < step * wordsToHidePerStep && hiddenIndices.length < words.length) {
+        let idx = Math.floor(Math.random() * words.length);
+        if (!hiddenIndices.includes(idx)) {
+          hiddenIndices.push(idx);
+        }
+      }
+    }
+
+    // Update verse display
+    function updateDisplay() {
+      let displayWords = words.map((word, idx) => {
+        if (hiddenIndices.includes(idx)) {
+          let underline = '_'.repeat(word.length);
+          return `<span class="relative underline decoration-gray-400 cursor-help" title="${word}">${underline}</span>`;
+        }
+        return word;
+      });
+      verseDisplay.innerHTML = displayWords.join(' ');
+      
+      if (hiddenIndices.length >= words.length && words.length > 0) {
+        hideMoreBtn.disabled = true;
+        verseDisplay.innerHTML += '<p class="mt-4 text-green-600 font-bold">Well done! All words memorized!</p>';
+      } else {
+        hideMoreBtn.disabled = false;
+      }
+    }
+
+    // Initialize
+    populateBooks();
+    loadRecentVerses();
+  </script>
+</body>
+</html>
