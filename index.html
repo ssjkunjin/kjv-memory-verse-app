@@ -111,7 +111,7 @@
     function saveRecentVerse(book, chapter, verse, text) {
       let recent = JSON.parse(localStorage.getItem('recentVerses') || '[]');
       const reference = `${chapter}:${verse}`;
-      recent = [{ book, chapter, verse, text }, ...recent.filter(v => `${v.chapter}:${v.verse}` !== reference)].slice(0, 10);
+      recent = [{ book, chapter, verse, text }, ...recent.filter(v => `${v.chapter}:${v.verse}` !== reference)].slice(0, 30);
       localStorage.setItem('recentVerses', JSON.stringify(recent));
       loadRecentVerses();
     }
