@@ -32,6 +32,24 @@
       <p id="verseError" class="mt-2 text-red-500 text-sm hidden">Error fetching data.</p>
     </div>
 
+    <!-- Topic Management -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Add to Topic</label>
+      <div class="flex gap-2">
+        <input id="topicInput" type="text" class="p-2 border border-gray-300 rounded-md flex-grow" placeholder="Enter or select topic">
+        <button id="addToTopicBtn" class="px-4 py-2 bg-purple-500 text-white rounded hover:bg-purple-600" disabled>Add to Topic</button>
+      </div>
+      <select id="topicSelect" class="mt-2 block w-full p-2 border border-gray-300 rounded-md">
+        <option value="">Select existing topic...</option>
+      </select>
+    </div>
+
+    <!-- Grouped Verses Display -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">Verses by Topic</label>
+      <div id="groupedVerses" class="space-y-4"></div>
+    </div>
+
     <!-- Verse Display -->
     <div id="verseDisplay" class="text-lg text-center mb-6 font-serif italic text-gray-800"></div>
 
@@ -47,6 +65,9 @@
   <script>
     // Initialize variables
     let currentVerse = '';
+    let currentBook = '';
+    let currentChapter = '';
+    let currentVerseRef = '';
     let words = [];
     let hiddenIndices = [];
     let step = 0;
@@ -95,8 +116,12 @@
     const hideMoreBtn = document.getElementById('hideMoreBtn');
     const showMoreBtn = document.getElementById('showMoreBtn');
     const showVerseBtn = document.getElementById('showVerseBtn');
+    const topicInput = document.getElementById('topicInput');
+    const topicSelect = document.getElementById('topicSelect');
+    const addToTopicBtn = document.getElementById('addToTopicBtn');
+    const groupedVerses = document.getElementById('groupedVerses');
 
-    // LocalStorage for recent verses
+    // LocalStorage for recent verses and topics
     function loadRecentVerses() {
       const recent = JSON.parse(localStorage.getItem('recentVerses') || '[]');
       recentVerses.innerHTML = '<option value="">Select a recent verse...</option>';
@@ -114,6 +139,55 @@
       recent = [{ book, chapter, verse, text }, ...recent.filter(v => `${v.chapter}:${v.verse}` !== reference)].slice(0, 30);
       localStorage.setItem('recentVerses', JSON.stringify(recent));
       loadRecentVerses();
+    }
+
+    function loadTopics() {
+      const topics = JSON.parse(localStorage.getItem('verseTopics') || '{}');
+      topicSelect.innerHTML = '<option value="">Select existing topic...</option>';
+      Object.keys(topics).forEach(topic => {
+        const option = document.createElement('option');
+        option.value = topic;
+        option.textContent = topic;
+        topicSelect.appendChild(option);
+      });
+      displayGroupedVerses();
+    }
+
+    function saveVerseToTopic(book, chapter, verse, text, topic) {
+      const topics = JSON.parse(localStorage.getItem('verseTopics') || '{}');
+      if (!topics[topic]) {
+        topics[topic] = [];
+      }
+      const reference = `${chapter}:${verse}`;
+      topics[topic] = [
+        { book, chapter, verse, text },
+        ...topics[topic].filter(v => `${v.chapter}:${v.verse}` !== reference)
+      ].slice(0, 30);
+      localStorage.setItem('verseTopics', JSON.stringify(topics));
+      loadTopics();
+    }
+
+    function displayGroupedVerses() {
+      const topics = JSON.parse(localStorage.getItem('verseTopics') || '{}');
+      groupedVerses.innerHTML = '';
+      Object.entries(topics).forEach(([topic, verses]) => {
+        const topicDiv = document.createElement('div');
+        topicDiv.className = 'border-b border-gray-200 pb-2 mb-2';
+        topicDiv.innerHTML = `
+          <h3 class="text-lg font-semibold text-gray-800">${topic}</h3>
+          <ul class="list-disc pl-5">
+            ${verses.map(v => `
+              <li class="flex justify-between items-center">
+                <span class="cursor-pointer hover:text-blue-500" onclick="loadVerseFromTopic('${v.book}', '${v.chapter}', '${v.verse}', '${v.text.replace(/'/g, "\\'")}')">
+                  ${v.book} ${v.chapter}:${v.verse} - ${v.text.substring(0, 50)}${v.text.length > 50 ? '...' : ''}
+                </span>
+                <button class="text-red-500 hover:text-red-700" onclick="deleteVerseFromTopic('${topic}', '${v.chapter}', '${v.verse}')">Delete</button>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+        groupedVerses.appendChild(topicDiv);
+      });
     }
 
     // Populate books
@@ -138,7 +212,7 @@
         const data = await response.json();
         chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
         data.data
-          .filter(chapter => /^\d+$/.test(chapter.number)) // Filter out non-numeric chapters (e.g., "intro")
+          .filter(chapter => /^\d+$/.test(chapter.number))
           .forEach(chapter => {
             const option = document.createElement('option');
             option.value = chapter.number;
@@ -170,7 +244,6 @@
           option.textContent = verse;
           verseSelect.appendChild(option);
         });
-        // Add range options (up to 3 verses apart)
         for (let i = 0; i < verses.length; i++) {
           for (let j = i + 1; j < Math.min(i + 4, verses.length); j++) {
             const option = document.createElement('option');
@@ -208,6 +281,7 @@
       fetchVerseBtn.disabled = true;
       verseDisplay.textContent = '';
       startBtn.disabled = true;
+      addToTopicBtn.disabled = true;
       verseError.classList.add('hidden');
       if (bookSelect.value) {
         fetchChapters(bookSelect.value);
@@ -219,6 +293,7 @@
       fetchVerseBtn.disabled = true;
       verseDisplay.textContent = '';
       startBtn.disabled = true;
+      addToTopicBtn.disabled = true;
       verseError.classList.add('hidden');
       if (chapterSelect.value) {
         fetchVerses(bookSelect.value, chapterSelect.value);
@@ -229,6 +304,7 @@
       fetchVerseBtn.disabled = !verseSelect.value;
       verseDisplay.textContent = '';
       startBtn.disabled = true;
+      addToTopicBtn.disabled = true;
       verseError.classList.add('hidden');
     });
 
@@ -236,11 +312,14 @@
       if (recentVerses.value) {
         const { book, chapter, verse, text } = JSON.parse(recentVerses.value);
         currentVerse = text;
+        currentBook = book;
+        currentChapter = chapter;
+        currentVerseRef = verse;
         verseDisplay.textContent = text;
         startBtn.disabled = false;
+        addToTopicBtn.disabled = false;
         resetPractice();
         verseError.classList.add('hidden');
-        // Update dropdowns to match selection
         bookSelect.value = bookList.find(b => b.name === book)?.id || '';
         chapterSelect.disabled = true;
         verseSelect.disabled = true;
@@ -269,11 +348,28 @@
         const verse = verseSelect.options[verseSelect.selectedIndex].textContent;
         const verseText = await fetchVerse(verseId, book, chapter, verse);
         currentVerse = verseText;
+        currentBook = book;
+        currentChapter = chapter;
+        currentVerseRef = verse;
         verseDisplay.textContent = verseText;
         startBtn.disabled = false;
+        addToTopicBtn.disabled = false;
         resetPractice();
       } catch (e) {
         showError(e.message);
+      }
+    });
+
+    topicSelect.addEventListener('change', () => {
+      topicInput.value = topicSelect.value;
+    });
+
+    addToTopicBtn.addEventListener('click', () => {
+      const topic = topicInput.value.trim();
+      if (topic && currentVerse) {
+        saveVerseToTopic(currentBook, currentChapter, currentVerseRef, currentVerse, topic);
+        topicInput.value = '';
+        topicSelect.value = '';
       }
     });
 
@@ -310,7 +406,7 @@
     showVerseBtn.addEventListener('click', () => {
       if (currentVerse) {
         verseDisplay.textContent = currentVerse;
-        setTimeout(updateDisplay, 3000); // Revert after 3 seconds
+        setTimeout(updateDisplay, 3000);
       }
     });
 
@@ -319,6 +415,7 @@
       verseError.textContent = message;
       verseError.classList.remove('hidden');
       startBtn.disabled = true;
+      addToTopicBtn.disabled = true;
       verseDisplay.textContent = '';
     }
 
@@ -359,9 +456,51 @@
       }
     }
 
+    // Load verse from topic
+    window.loadVerseFromTopic = function(book, chapter, verse, text) {
+      currentVerse = text;
+      currentBook = book;
+      currentChapter = chapter;
+      currentVerseRef = verse;
+      verseDisplay.textContent = text;
+      startBtn.disabled = false;
+      addToTopicBtn.disabled = false;
+      resetPractice();
+      verseError.classList.add('hidden');
+      bookSelect.value = bookList.find(b => b.name === book)?.id || '';
+      chapterSelect.disabled = true;
+      verseSelect.disabled = true;
+      fetchVerseBtn.disabled = true;
+      if (bookSelect.value) {
+        fetchChapters(bookSelect.value).then(() => {
+          chapterSelect.value = chapter;
+          fetchVerses(bookSelect.value, chapter).then(() => {
+            verseSelect.value = verse.includes('-') ? 
+              `${bookSelect.value}.${chapter}.${verse}` : 
+              `${bookSelect.value}.${chapter}.${verse}`;
+            fetchVerseBtn.disabled = false;
+          });
+        });
+      }
+    };
+
+    // Delete verse from topic
+    window.deleteVerseFromTopic = function(topic, chapter, verse) {
+      const topics = JSON.parse(localStorage.getItem('verseTopics') || '{}');
+      if (topics[topic]) {
+        topics[topic] = topics[topic].filter(v => `${v.chapter}:${v.verse}` !== `${chapter}:${verse}`);
+        if (topics[topic].length === 0) {
+          delete topics[topic];
+        }
+        localStorage.setItem('verseTopics', JSON.stringify(topics));
+        loadTopics();
+      }
+    };
+
     // Initialize
     populateBooks();
     loadRecentVerses();
+    loadTopics();
   </script>
 </body>
 </html>
