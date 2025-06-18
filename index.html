@@ -158,10 +158,10 @@
       if (!topics[topic]) {
         topics[topic] = [];
       }
-      const reference = `${chapter}:${verse}`;
+      const reference = `${book}:${chapter}:${verse}`;
       topics[topic] = [
         { book, chapter, verse, text },
-        ...topics[topic].filter(v => `${v.chapter}:${v.verse}` !== reference)
+        ...topics[topic].filter(v => `${v.book}:${v.chapter}:${v.verse}` !== reference)
       ].slice(0, 30);
       localStorage.setItem('verseTopics', JSON.stringify(topics));
       loadTopics();
@@ -181,7 +181,7 @@
                 <span class="cursor-pointer hover:text-blue-500" onclick="loadVerseFromTopic('${v.book}', '${v.chapter}', '${v.verse}', '${v.text.replace(/'/g, "\\'")}')">
                   ${v.book} ${v.chapter}:${v.verse} - ${v.text.substring(0, 50)}${v.text.length > 50 ? '...' : ''}
                 </span>
-                <button class="text-red-500 hover:text-red-700" onclick="deleteVerseFromTopic('${topic}', '${v.chapter}', '${v.verse}')">Delete</button>
+                <button class="text-red-500 hover:text-red-700" onclick="deleteVerseFromTopic('${topic}', '${v.book}', '${v.chapter}', '${v.verse}')">Delete</button>
               </li>
             `).join('')}
           </ul>
@@ -485,10 +485,10 @@
     };
 
     // Delete verse from topic
-    window.deleteVerseFromTopic = function(topic, chapter, verse) {
+    window.deleteVerseFromTopic = function(topic, book, chapter, verse) {
       const topics = JSON.parse(localStorage.getItem('verseTopics') || '{}');
       if (topics[topic]) {
-        topics[topic] = topics[topic].filter(v => `${v.chapter}:${v.verse}` !== `${chapter}:${verse}`);
+        topics[topic] = topics[topic].filter(v => `${v.book}:${v.chapter}:${v.verse}` !== `${book}:${chapter}:${verse}`);
         if (topics[topic].length === 0) {
           delete topics[topic];
         }
