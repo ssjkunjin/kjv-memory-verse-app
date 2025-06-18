@@ -181,7 +181,7 @@
                 <span class="cursor-pointer hover:text-blue-500" onclick="loadVerseFromTopic('${v.book}', '${v.chapter}', '${v.verse}', '${v.text.replace(/'/g, "\\'")}')">
                   ${v.book} ${v.chapter}:${v.verse} - ${v.text.substring(0, 50)}${v.text.length > 50 ? '...' : ''}
                 </span>
-                <button class="text-red-500 hover:text-red-700" onclick="deleteVerseFromTopic('${topic}', '${v.book}', '${v.chapter}', '${v.verse}')">Delete</button>
+                <button class="text-red-500 hover:text-red-700" onclick="deleteVerseFromTopic('${topic.replace(/'/g, "\\'")}', '${v.book}', '${v.chapter}', '${v.verse}')">Delete</button>
               </li>
             `).join('')}
           </ul>
